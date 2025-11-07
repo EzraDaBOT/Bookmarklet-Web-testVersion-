@@ -1,200 +1,274 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BookmarkletHub</title>
-  <link rel="stylesheet" href="style.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bookmarklet Hub — Drag to bookmarks</title>
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header>
-    <h1>BookmarkletHub</h1>
-    <p>Upload, share, and install bookmarklets — like YouTube but for tiny scripts.</p>
+    <h1>Bookmarklet Hub</h1>
+    <p class="lead">Create bookmarklets, drag links to your bookmarks bar, and store them locally.</p>
   </header>
 
-  <section id="message" class="hidden"></section>
+  <main>
+    <section class="creator">
+      <label for="name">Name</label>
+      <input id="name" placeholder="Example: Pause Game" />
 
-  <section id="form">
-    <h2>Add / Edit Bookmarklet</h2>
-    <input id="name" type="text" placeholder="Name" />
-    <textarea id="desc" placeholder="Description (optional)"></textarea>
-    <textarea id="code" placeholder="Paste your JavaScript code here"></textarea>
-    <div class="buttons">
-      <button id="save">Save</button>
-      <button id="cancel" class="secondary hidden">Cancel</button>
-    </div>
-  </section>
+      <label for="code">JavaScript code (or paste a full javascript:... bookmarklet)</label>
+      <textarea id="code" rows="8" placeholder="Paste JS here. E.g. alert('hello') or a full javascript:(... )"></textarea>
 
-  <section id="tools">
-    <input id="search" type="text" placeholder="Search bookmarklets..." />
-    <div>
-      <button id="export">Export JSON</button>
-      <input id="importFile" type="file" accept="application/json" hidden />
-      <button id="import">Import JSON</button>
-    </div>
-  </section>
+      <div class="controls">
+        <button id="create">Create Bookmarklet</button>
+        <button id="clearForm">Clear</button>
+        <button id="exportAll">Export JSON</button>
+        <button id="importBtn">Import JSON</button>
+      </div>
 
-  <section id="list"></section>
+      <p class="hint">After creating, drag the blue link to your bookmarks bar. If the bar is hidden: enable the bookmarks bar in your browser (usually Ctrl+Shift+B / Cmd+Shift+B).</p>
+    </section>
+
+    <section class="preview">
+      <h2>Drag link</h2>
+      <div id="generated" class="generated">
+        <!-- Generated draggable link will appear here -->
+      </div>
+
+      <h2>Saved bookmarklets</h2>
+      <ul id="list" class="list"></ul>
+    </section>
+  </main>
 
   <footer>
-    Built with ❤️ — BookmarkletHub local demo.  
-    Data is saved in your browser.
+    <small>All data stored locally in this browser. No server required.</small>
   </footer>
 
+  <!-- Hidden file input for import -->
+  <input type="file" id="importFile" accept=".json" style="display:none" />
+
   <script>
-    const STORAGE_KEY = "bookmarklethub_v1";
-    const nameInput = document.getElementById("name");
-    const descInput = document.getElementById("desc");
-    const codeInput = document.getElementById("code");
-    const saveBtn = document.getElementById("save");
-    const cancelBtn = document.getElementById("cancel");
-    const listEl = document.getElementById("list");
-    const messageEl = document.getElementById("message");
-    const searchEl = document.getElementById("search");
-    const exportBtn = document.getElementById("export");
-    const importBtn = document.getElementById("import");
-    const importFile = document.getElementById("importFile");
+  (function () {
+    // Helpers
+    const $ = id => document.getElementById(id);
+    const nameInput = $('name');
+    const codeInput = $('code');
+    const createBtn = $('create');
+    const clearBtn = $('clearForm');
+    const genDiv = $('generated');
+    const listEl = $('list');
+    const exportBtn = $('exportAll');
+    const importBtn = $('importBtn');
+    const importFile = $('importFile');
 
-    let bookmarklets = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
-    let editingId = null;
+    const STORAGE_KEY = 'bookmarklet_hub_items_v1';
 
-    function showMessage(text, type = "info") {
-      messageEl.textContent = text;
-      messageEl.className = type;
-      messageEl.classList.remove("hidden");
-      setTimeout(() => messageEl.classList.add("hidden"), 3000);
+    function loadItems() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.error('Failed to load items', e);
+        return [];
+      }
+    }
+    function saveItems(items) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     }
 
-    function saveToStorage() {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarklets));
+    function normalizeCode(input) {
+      if (!input) return '';
+      let s = input.trim();
+      if (s.startsWith('javascript:')) {
+        s = s.slice('javascript:'.length).trim();
+      }
+      // Replace CR/LF with spaces and compress whitespace
+      s = s.replace(/\r?\n/g, ' ').replace(/\s+/g, ' ').trim();
+      // If user entered a bare expression like "alert(1)" or "void(document.body.style.background='red')"
+      // we wrap it in an IIFE so it runs when bookmarklet clicked.
+      // If user already started with (function or !function etc, it's still safe to wrap.
+      return '(function(){' + s + '})();';
     }
 
-    function normalizeCode(code) {
-      code = code.trim();
-      if (!code.startsWith("javascript:"))
-        code = "javascript:(function(){" + code + "})();";
-      return code;
+    function makeHref(code) {
+      // Many browsers accept plain javascript: with the code; keep it readable.
+      // Avoid double-encoding to make it draggable & editable easily.
+      return 'javascript:' + code;
     }
 
-    function render() {
-      const query = searchEl.value.toLowerCase();
-      listEl.innerHTML = "";
-      const filtered = bookmarklets.filter(b => (b.name + " " + (b.desc || "")).toLowerCase().includes(query));
+    function createDraggableAnchor(name, href) {
+      const a = document.createElement('a');
+      a.className = 'draglink';
+      a.href = href;
+      a.textContent = name || href;
+      a.title = 'Drag this to your bookmarks bar';
+      a.setAttribute('draggable', 'true');
 
-      if (filtered.length === 0) {
-        listEl.innerHTML = "<p class='empty'>No bookmarklets found.</p>";
+      // For convenience: clicking will open the bookmarklet in-place as well (useful for testing).
+      a.addEventListener('click', function (e) {
+        e.preventDefault();
+        try {
+          // Evaluate the code part (after javascript:)
+          const code = href.replace(/^javascript:/i, '');
+          (0, eval)(code);
+        } catch (err) {
+          alert('Error running bookmarklet: ' + err);
+        }
+      });
+
+      return a;
+    }
+
+    function renderGenerated(name, href) {
+      genDiv.innerHTML = '';
+      const info = document.createElement('div');
+      info.className = 'genWrap';
+      const a = createDraggableAnchor(name, href);
+      info.appendChild(a);
+
+      const small = document.createElement('div');
+      small.className = 'genCopy';
+      const input = document.createElement('input');
+      input.readOnly = true;
+      input.value = href;
+      input.title = 'Right-click → Copy link address';
+      small.appendChild(input);
+      info.appendChild(small);
+
+      genDiv.appendChild(info);
+    }
+
+    function renderList() {
+      listEl.innerHTML = '';
+      const items = loadItems();
+      if (items.length === 0) {
+        listEl.innerHTML = '<li class="empty">No bookmarklets saved yet.</li>';
         return;
       }
+      items.forEach((it, idx) => {
+        const li = document.createElement('li');
+        const left = document.createElement('div');
+        left.className = 'itemLeft';
 
-      filtered.forEach(b => {
-        const div = document.createElement("div");
-        div.className = "item";
-        div.innerHTML = `
-          <div class="info">
-            <h3>${b.name}</h3>
-            <p>${b.desc || ""}</p>
-          </div>
-          <div class="actions">
-            <a href="${b.code}" class="install">Install</a>
-            <button onclick="copyLink('${b.id}')">Copy Link</button>
-            <button onclick="copyCode('${b.id}')">Copy Code</button>
-            <button onclick="editItem('${b.id}')">Edit</button>
-            <button class="danger" onclick="deleteItem('${b.id}')">Delete</button>
-          </div>
-        `;
-        listEl.appendChild(div);
+        const a = createDraggableAnchor(it.name || 'Unnamed', it.href);
+        left.appendChild(a);
+
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.textContent = it.name || '';
+        left.appendChild(meta);
+
+        li.appendChild(left);
+
+        const right = document.createElement('div');
+        right.className = 'itemRight';
+
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', () => {
+          nameInput.value = it.name || '';
+          // get original code by trimming wrapper
+          let code = it.href.replace(/^javascript:/i, '');
+          // try to remove leading (function(){ and trailing })();
+          if (code.startsWith('(function(){') && code.endsWith('})();')) {
+            code = code.slice(12, -4);
+          }
+          codeInput.value = code;
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        right.appendChild(editBtn);
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.addEventListener('click', () => {
+          if (!confirm('Delete this bookmarklet?')) return;
+          const items2 = loadItems();
+          items2.splice(idx, 1);
+          saveItems(items2);
+          renderList();
+        });
+        right.appendChild(delBtn);
+
+        li.appendChild(right);
+        listEl.appendChild(li);
       });
     }
 
-    saveBtn.onclick = () => {
-      const name = nameInput.value.trim();
-      const desc = descInput.value.trim();
-      const code = codeInput.value.trim();
-      if (!name || !code) return showMessage("Name and code required", "error");
-      const normalized = normalizeCode(code);
-
-      if (editingId) {
-        const b = bookmarklets.find(x => x.id === editingId);
-        b.name = name;
-        b.desc = desc;
-        b.code = normalized;
-        editingId = null;
-        cancelBtn.classList.add("hidden");
-      } else {
-        bookmarklets.unshift({ id: Date.now().toString(), name, desc, code: normalized });
+    // Create handler
+    createBtn.addEventListener('click', () => {
+      const name = nameInput.value.trim() || 'Bookmarklet';
+      const raw = codeInput.value;
+      if (!raw.trim()) {
+        alert('Paste some JavaScript code into the box first.');
+        return;
       }
-      saveToStorage();
-      nameInput.value = descInput.value = codeInput.value = "";
-      showMessage("Saved!", "success");
-      render();
-    };
+      const normalized = normalizeCode(raw);
+      const href = makeHref(normalized);
 
-    cancelBtn.onclick = () => {
-      editingId = null;
-      nameInput.value = descInput.value = codeInput.value = "";
-      cancelBtn.classList.add("hidden");
-    };
+      // Save to localStorage
+      const items = loadItems();
+      items.unshift({ name, href, createdAt: Date.now() });
+      saveItems(items);
 
-    function editItem(id) {
-      const b = bookmarklets.find(x => x.id === id);
-      nameInput.value = b.name;
-      descInput.value = b.desc;
-      codeInput.value = b.code;
-      editingId = id;
-      cancelBtn.classList.remove("hidden");
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+      renderGenerated(name, href);
+      renderList();
+    });
 
-    function deleteItem(id) {
-      if (!confirm("Delete this bookmarklet?")) return;
-      bookmarklets = bookmarklets.filter(x => x.id !== id);
-      saveToStorage();
-      render();
-    }
+    clearBtn.addEventListener('click', () => {
+      nameInput.value = '';
+      codeInput.value = '';
+      genDiv.innerHTML = '';
+    });
 
-    function copyLink(id) {
-      const b = bookmarklets.find(x => x.id === id);
-      const encoded = btoa(JSON.stringify(b));
-      const link = location.origin + location.pathname + "#" + encoded;
-      navigator.clipboard.writeText(link);
-      showMessage("Share link copied!", "success");
-    }
-
-    function copyCode(id) {
-      const b = bookmarklets.find(x => x.id === id);
-      navigator.clipboard.writeText(b.code);
-      showMessage("Code copied!", "success");
-    }
-
-    searchEl.oninput = render;
-
-    exportBtn.onclick = () => {
-      const blob = new Blob([JSON.stringify(bookmarklets, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "bookmarklets.json";
+    exportBtn.addEventListener('click', () => {
+      const items = loadItems();
+      const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bookmarklets.json';
+      document.body.appendChild(a);
       a.click();
-    };
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
 
-    importBtn.onclick = () => importFile.click();
-    importFile.onchange = e => {
-      const file = e.target.files[0];
+    importBtn.addEventListener('click', () => importFile.click());
+    importFile.addEventListener('change', (ev) => {
+      const file = ev.target.files && ev.target.files[0];
+      if (!file) return;
       const reader = new FileReader();
-      reader.onload = evt => {
+      reader.onload = function () {
         try {
-          const data = JSON.parse(evt.target.result);
-          bookmarklets = data;
-          saveToStorage();
-          render();
-          showMessage("Imported!", "success");
-        } catch {
-          showMessage("Invalid file", "error");
+          const parsed = JSON.parse(reader.result);
+          if (!Array.isArray(parsed)) throw new Error('Invalid format: expected an array');
+          // Basic validation
+          const clean = parsed.filter(p => p && typeof p.href === 'string');
+          const existing = loadItems();
+          const merged = clean.concat(existing);
+          saveItems(merged);
+          renderList();
+          alert('Imported ' + clean.length + ' bookmarklets.');
+        } catch (err) {
+          alert('Import failed: ' + err);
         }
       };
       reader.readAsText(file);
-    };
+      importFile.value = '';
+    });
 
-    render();
+    // Keyboard shortcut: Ctrl+Enter create
+    codeInput.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        e.preventDefault();
+        createBtn.click();
+      }
+    });
+
+    // Bootstrap
+    renderList();
+  })();
   </script>
 </body>
 </html>
