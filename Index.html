@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BookmarkletHub</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <h1>BookmarkletHub</h1>
+    <p>Upload, share, and install bookmarklets — like YouTube but for tiny scripts.</p>
+  </header>
+
+  <section id="message" class="hidden"></section>
+
+  <section id="form">
+    <h2>Add / Edit Bookmarklet</h2>
+    <input id="name" type="text" placeholder="Name" />
+    <textarea id="desc" placeholder="Description (optional)"></textarea>
+    <textarea id="code" placeholder="Paste your JavaScript code here"></textarea>
+    <div class="buttons">
+      <button id="save">Save</button>
+      <button id="cancel" class="secondary hidden">Cancel</button>
+    </div>
+  </section>
+
+  <section id="tools">
+    <input id="search" type="text" placeholder="Search bookmarklets..." />
+    <div>
+      <button id="export">Export JSON</button>
+      <input id="importFile" type="file" accept="application/json" hidden />
+      <button id="import">Import JSON</button>
+    </div>
+  </section>
+
+  <section id="list"></section>
+
+  <footer>
+    Built with ❤️ — BookmarkletHub local demo.  
+    Data is saved in your browser.
+  </footer>
+
+  <script>
+    const STORAGE_KEY = "bookmarklethub_v1";
+    const nameInput = document.getElementById("name");
+    const descInput = document.getElementById("desc");
+    const codeInput = document.getElementById("code");
+    const saveBtn = document.getElementById("save");
+    const cancelBtn = document.getElementById("cancel");
+    const listEl = document.getElementById("list");
+    const messageEl = document.getElementById("message");
+    const searchEl = document.getElementById("search");
+    const exportBtn = document.getElementById("export");
+    const importBtn = document.getElementById("import");
+    const importFile = document.getElementById("importFile");
+
+    let bookmarklets = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    let editingId = null;
+
+    function showMessage(text, type = "info") {
+      messageEl.textContent = text;
+      messageEl.className = type;
+      messageEl.classList.remove("hidden");
+      setTimeout(() => messageEl.classList.add("hidden"), 3000);
+    }
+
+    function saveToStorage() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(bookmarklets));
+    }
+
+    function normalizeCode(code) {
+      code = code.trim();
+      if (!code.startsWith("javascript:"))
+        code = "javascript:(function(){" + code + "})();";
+      return code;
+    }
+
+    function render() {
+      const query = searchEl.value.toLowerCase();
+      listEl.innerHTML = "";
+      const filtered = bookmarklets.filter(b => (b.name + " " + (b.desc || "")).toLowerCase().includes(query));
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = "<p class='empty'>No bookmarklets found.</p>";
+        return;
+      }
+
+      filtered.forEach(b => {
+        const div = document.createElement("div");
+        div.className = "item";
+        div.innerHTML = `
+          <div class="info">
+            <h3>${b.name}</h3>
+            <p>${b.desc || ""}</p>
+          </div>
+          <div class="actions">
+            <a href="${b.code}" class="install">Install</a>
+            <button onclick="copyLink('${b.id}')">Copy Link</button>
+            <button onclick="copyCode('${b.id}')">Copy Code</button>
+            <button onclick="editItem('${b.id}')">Edit</button>
+            <button class="danger" onclick="deleteItem('${b.id}')">Delete</button>
+          </div>
+        `;
+        listEl.appendChild(div);
+      });
+    }
+
+    saveBtn.onclick = () => {
+      const name = nameInput.value.trim();
+      const desc = descInput.value.trim();
+      const code = codeInput.value.trim();
+      if (!name || !code) return showMessage("Name and code required", "error");
+      const normalized = normalizeCode(code);
+
+      if (editingId) {
+        const b = bookmarklets.find(x => x.id === editingId);
+        b.name = name;
+        b.desc = desc;
+        b.code = normalized;
+        editingId = null;
+        cancelBtn.classList.add("hidden");
+      } else {
+        bookmarklets.unshift({ id: Date.now().toString(), name, desc, code: normalized });
+      }
+      saveToStorage();
+      nameInput.value = descInput.value = codeInput.value = "";
+      showMessage("Saved!", "success");
+      render();
+    };
+
+    cancelBtn.onclick = () => {
+      editingId = null;
+      nameInput.value = descInput.value = codeInput.value = "";
+      cancelBtn.classList.add("hidden");
+    };
+
+    function editItem(id) {
+      const b = bookmarklets.find(x => x.id === id);
+      nameInput.value = b.name;
+      descInput.value = b.desc;
+      codeInput.value = b.code;
+      editingId = id;
+      cancelBtn.classList.remove("hidden");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function deleteItem(id) {
+      if (!confirm("Delete this bookmarklet?")) return;
+      bookmarklets = bookmarklets.filter(x => x.id !== id);
+      saveToStorage();
+      render();
+    }
+
+    function copyLink(id) {
+      const b = bookmarklets.find(x => x.id === id);
+      const encoded = btoa(JSON.stringify(b));
+      const link = location.origin + location.pathname + "#" + encoded;
+      navigator.clipboard.writeText(link);
+      showMessage("Share link copied!", "success");
+    }
+
+    function copyCode(id) {
+      const b = bookmarklets.find(x => x.id === id);
+      navigator.clipboard.writeText(b.code);
+      showMessage("Code copied!", "success");
+    }
+
+    searchEl.oninput = render;
+
+    exportBtn.onclick = () => {
+      const blob = new Blob([JSON.stringify(bookmarklets, null, 2)], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "bookmarklets.json";
+      a.click();
+    };
+
+    importBtn.onclick = () => importFile.click();
+    importFile.onchange = e => {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = evt => {
+        try {
+          const data = JSON.parse(evt.target.result);
+          bookmarklets = data;
+          saveToStorage();
+          render();
+          showMessage("Imported!", "success");
+        } catch {
+          showMessage("Invalid file", "error");
+        }
+      };
+      reader.readAsText(file);
+    };
+
+    render();
+  </script>
+</body>
+</html>
