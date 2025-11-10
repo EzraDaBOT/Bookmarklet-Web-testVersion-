@@ -1,143 +1,108 @@
-:root{
-  --bg:#0f1720;
-  --card:#0b1220;
-  --accent:#2b6fb5;
-  --muted:#9aa8bf;
-  --text:#e6eef8;
-  --panel:#0c1420;
+body {
+  font-family: Arial, sans-serif;
+  background: #111;
+  color: #eee;
+  margin: 0;
+  padding: 0;
 }
 
-*{box-sizing:border-box}
-html,body{height:100%}
-body{
-  margin:0;
-  font-family:Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-  background:linear-gradient(180deg,#071026 0%, #0b1826 100%);
-  color:var(--text);
-  -webkit-font-smoothing:antialiased;
-  -moz-osx-font-smoothing:grayscale;
-  padding:18px;
+header {
+  text-align: center;
+  padding: 2rem;
+  background: #222;
+  box-shadow: 0 0 10px #000;
 }
 
-header{
-  margin-bottom:18px;
-}
-h1{
-  margin:0 0 6px 0;
-  font-size:20px;
-  letter-spacing:-0.4px;
-}
-.lead{
-  margin:0;
-  color:var(--muted);
-  font-size:13px;
+h1 {
+  margin: 0;
+  font-size: 2rem;
+  color: #4ee44e;
 }
 
-main{
-  display:flex;
-  gap:18px;
-  flex-wrap:wrap;
+#uploadSection {
+  background: #181818;
+  padding: 1.5rem;
+  text-align: center;
+  border-bottom: 1px solid #333;
 }
 
-.creator, .preview{
-  background:var(--card);
-  border-radius:10px;
-  padding:12px;
-  box-shadow:0 6px 20px rgba(2,6,23,0.6);
-  width:520px;
-  max-width:100%;
+#uploadForm {
+  max-width: 600px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
 }
 
-.creator label{
-  display:block;
-  font-size:12px;
-  color:var(--muted);
-  margin-top:8px;
-  margin-bottom:6px;
+input, textarea, button {
+  padding: 0.7rem;
+  border: none;
+  border-radius: 5px;
+  font-size: 1rem;
 }
 
-input[type="text"], input[type="search"], textarea{
-  width:100%;
-  padding:10px 12px;
-  background:var(--panel);
-  border:1px solid rgba(255,255,255,0.03);
-  color:var(--text);
-  border-radius:8px;
-  outline:none;
-  font-size:13px;
+input, textarea {
+  background: #222;
+  color: #eee;
 }
 
-textarea{font-family:monospace; font-size:13px}
-
-.controls{
-  margin-top:12px;
-  display:flex;
-  gap:8px;
-  flex-wrap:wrap;
+button {
+  background: #4ee44e;
+  color: #000;
+  cursor: pointer;
+  font-weight: bold;
 }
 
-button{
-  background:linear-gradient(180deg,var(--accent), #1f5e98);
-  color:white;
-  border:0;
-  padding:8px 12px;
-  border-radius:8px;
-  cursor:pointer;
-  font-weight:600;
-  font-size:13px;
-}
-button:hover{opacity:0.95}
-button:active{transform:translateY(1px)}
-
-.hint{font-size:12px;color:var(--muted);margin-top:8px}
-
-.generated .genWrap{
-  display:flex;
-  gap:10px;
-  align-items:center;
-  flex-wrap:wrap;
-  margin-bottom:10px;
-}
-.draglink{
-  display:inline-block;
-  padding:10px 14px;
-  background:linear-gradient(90deg,#0b5ea8,#2b8cd6);
-  color:white;
-  border-radius:8px;
-  text-decoration:none;
-  font-weight:700;
-  box-shadow:0 8px 24px rgba(11,94,168,0.2);
-}
-.draglink:hover{opacity:0.95}
-
-.genCopy input{
-  width:420px;
-  max-width:100%;
-  padding:8px;
-  border-radius:6px;
-  border:1px solid rgba(255,255,255,0.04);
-  background:#071428;
-  color:var(--muted);
-  font-size:12px;
+button:hover {
+  background: #6cff6c;
 }
 
-.list{
-  list-style:none;
-  padding:0;
-  margin:8px 0 0 0;
+#listSection {
+  padding: 2rem;
 }
-.list li{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:8px;
-  border-radius:8px;
-  background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
-  margin-bottom:8px;
-}
-.list li .itemLeft{display:flex;gap:12px;align-items:center}
-.list li .meta{font-size:13px;color:var(--muted)}
-.itemRight button{margin-left:8px;background:transparent;border:1px solid rgba(255,255,255,0.04);padding:6px 8px;border-radius:6px;color:var(--text);font-weight:600}
-.empty{color:var(--muted);padding:12px;text-align:center}
 
-footer{margin-top:14px;color:var(--muted);font-size:12px}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+}
+
+.card {
+  background: #1c1c1c;
+  padding: 1rem;
+  border-radius: 8px;
+  box-shadow: 0 0 8px #000;
+}
+
+.card h3 {
+  margin: 0 0 0.3rem 0;
+  color: #6cff6c;
+}
+
+.btns {
+  margin-top: 0.8rem;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+a.bm {
+  text-decoration: none;
+  background: #444;
+  color: #eee;
+  padding: 0.5rem;
+  border-radius: 5px;
+  text-align: center;
+}
+
+a.bm:hover {
+  background: #555;
+}
+
+.copy, .delete {
+  background: #333;
+  color: #eee;
+}
+
+.copy:hover { background: #555; }
+.delete:hover { background: #a33; }
